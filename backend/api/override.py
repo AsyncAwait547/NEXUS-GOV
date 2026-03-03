@@ -1,9 +1,11 @@
-"""Human Override API — Pause, resume, reassign, force actions."""
-from fastapi import APIRouter, HTTPException
+"""Human Override API — Pause, resume, reassign, force actions. Protected by RBAC."""
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional, List
 import time
 import logging
+
+from api.auth import require_role, Role, get_current_user
 
 logger = logging.getLogger("nexus.override")
 
@@ -43,7 +45,7 @@ class ReassignRequest(BaseModel):
 
 
 @router.post("/pause")
-async def pause_all(req: OverrideRequest):
+async def pause_all(req: OverrideRequest, user: dict = Depends(require_role(Role.ADMIN, Role.OPERATOR))):
     """Pause all agents."""
     for agent in _agents.values():
         agent.pause()
@@ -53,6 +55,7 @@ async def pause_all(req: OverrideRequest):
         action="pause_all_agents",
         reasoning=f"Human override: {req.reason or 'Manual pause'}",
         cdil_state=await _cdil.get_snapshot(),
+        authenticated_user=user["username"],
     )
 
     await _ws_broadcast("reasoning_log", {
@@ -69,7 +72,7 @@ async def pause_all(req: OverrideRequest):
 
 
 @router.post("/resume")
-async def resume_all(req: OverrideRequest):
+async def resume_all(req: OverrideRequest, user: dict = Depends(require_role(Role.ADMIN, Role.OPERATOR))):
     """Resume all agents."""
     for agent in _agents.values():
         agent.resume()
@@ -79,6 +82,7 @@ async def resume_all(req: OverrideRequest):
         action="resume_all_agents",
         reasoning=f"Human override: {req.reason or 'Manual resume'}",
         cdil_state=await _cdil.get_snapshot(),
+        authenticated_user=user["username"],
     )
 
     await _ws_broadcast("reasoning_log", {
@@ -95,7 +99,7 @@ async def resume_all(req: OverrideRequest):
 
 
 @router.post("/reassign")
-async def reassign_resource(req: ReassignRequest):
+async def reassign_resource(req: ReassignRequest, user: dict = Depends(require_role(Role.ADMIN, Role.OPERATOR))):
     """Reassign a resource from one agent to another."""
     if req.from_agent not in _agents or req.to_agent not in _agents:
         raise HTTPException(404, "Agent not found")
@@ -122,7 +126,7 @@ async def reassign_resource(req: ReassignRequest):
 
 
 @router.post("/force_action")
-async def force_action(req: ForceActionRequest):
+async def force_action(req: ForceActionRequest, user: dict = Depends(require_role(Role.ADMIN, Role.FIRE_CHIEF))):
     """Force a manual action on the CDIL."""
     # Apply CDIL mutations directly
     cdil_updates = {}
@@ -158,7 +162,7 @@ async def force_action(req: ForceActionRequest):
 
 
 @router.post("/{agent_id}/pause")
-async def pause_agent(agent_id: str, req: OverrideRequest):
+async def pause_agent(agent_id: str, req: OverrideRequest, user: dict = Depends(require_role(Role.ADMIN, Role.OPERATOR))):
     """Pause a specific agent."""
     if agent_id not in _agents:
         raise HTTPException(404, f"Agent {agent_id} not found")
@@ -183,7 +187,7 @@ async def pause_agent(agent_id: str, req: OverrideRequest):
 
 
 @router.post("/{agent_id}/resume")
-async def resume_agent(agent_id: str, req: OverrideRequest):
+async def resume_agent(agent_id: str, req: OverrideRequest, user: dict = Depends(require_role(Role.ADMIN, Role.OPERATOR))):
     """Resume a specific agent."""
     if agent_id not in _agents:
         raise HTTPException(404, f"Agent {agent_id} not found")

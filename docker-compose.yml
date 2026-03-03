@@ -14,6 +14,62 @@ services:
       timeout: 3s
       retries: 5
 
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-log:/mosquitto/log
+    healthcheck:
+      test: [ "CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -W 3 || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  influxdb:
+    image: influxdb:2.7-alpine
+    ports:
+      - "8086:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: nexus
+      DOCKER_INFLUXDB_INIT_PASSWORD: nexus2026
+      DOCKER_INFLUXDB_INIT_ORG: nexus-gov
+      DOCKER_INFLUXDB_INIT_BUCKET: city_telemetry
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: nexus-gov-influx-token
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+    healthcheck:
+      test: [ "CMD", "influx", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  redpanda:
+    image: redpandadata/redpanda:v24.1.1
+    command:
+      - redpanda start
+      - --smp 1
+      - --memory 512M
+      - --overprovisioned
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr internal://redpanda:8082,external://localhost:18082
+    ports:
+      - "19092:19092"
+      - "18082:18082"
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: [ "CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1" ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
   backend:
     build: ./backend
     ports:
@@ -21,15 +77,27 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      mosquitto:
+        condition: service_healthy
     environment:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       REDIS_URL: redis://redis:6379
-      DEMO_MODE: "true"
-      MOCK_LLM: "true"
+      MQTT_BROKER_HOST: mosquitto
+      MQTT_BROKER_PORT: "1883"
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: nexus-gov-influx-token
+      KAFKA_BROKER_URL: redpanda:9092
+      DEMO_MODE: "false"
+      MOCK_LLM: "false"
+      OPENWEATHERMAP_API_KEY: ${OPENWEATHERMAP_API_KEY:-}
     volumes:
       - ./backend:/app
     restart: unless-stopped
 
 volumes:
   redis-data:
+  mosquitto-data:
+  mosquitto-log:
+  influxdb-data:
+  redpanda-data:

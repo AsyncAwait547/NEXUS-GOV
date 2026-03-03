@@ -8,3 +8,8 @@ pydantic-settings==2.7.1
 python-dotenv==1.0.1
 aiosqlite==0.20.0
 httpx==0.28.1
+asyncio-mqtt==0.16.2
+paho-mqtt==1.6.1
+influxdb-client[async]==1.44.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4

@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nexus-config
+  namespace: nexus-gov
+data:
+  REDIS_URL: "redis://redis-svc:6379"
+  MQTT_BROKER_HOST: "mosquitto-svc"
+  MQTT_BROKER_PORT: "1883"
+  INFLUXDB_URL: "http://influxdb-svc:8086"
+  INFLUXDB_ORG: "nexus-gov"
+  INFLUXDB_BUCKET: "city_telemetry"
+  KAFKA_BROKER_URL: "redpanda-svc:9092"
+  USE_KAFKA: "false"
+  DEMO_MODE: "false"
+  MOCK_LLM: "false"
+  AGENT_CYCLE_INTERVAL: "2.0"
+  WEATHER_POLL_INTERVAL: "60"
+  OPENWEATHERMAP_CITY_ID: "1269843"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nexus-secrets
+  namespace: nexus-gov
+type: Opaque
+stringData:
+  GEMINI_API_KEY: ""
+  GROQ_API_KEY: ""
+  OPENWEATHERMAP_API_KEY: ""
+  INFLUXDB_TOKEN: "nexus-gov-influx-token"
+  SECRET_KEY: "nexus-gov-secret-2026"
+  JWT_SECRET: "nexus-gov-jwt-secret-2026"

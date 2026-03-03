@@ -1,7 +1,13 @@
-"""REST API Routes — City state, agents, audit, scenarios, health."""
-from fastapi import APIRouter, HTTPException
+"""REST API Routes — City state, agents, audit, scenarios, auth, health."""
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional
+
+from api.auth import (
+    authenticate_user, create_access_token, require_role, require_auth,
+    get_current_user, Role, LoginRequest, TokenResponse, DEFAULT_USERS,
+)
+from config import settings
 
 router = APIRouter(prefix="/api/v1")
 
@@ -12,21 +18,61 @@ _event_bus = None
 _audit_chain = None
 _scenario_engine = None
 _agents = {}
+_timeseries = None
 
 
-def init_routes(cdil, event_bus, audit_chain, scenario_engine, agents: dict):
-    global _cdil, _event_bus, _audit_chain, _scenario_engine, _agents
+def init_routes(cdil, event_bus, audit_chain, scenario_engine, agents: dict, timeseries=None):
+    global _cdil, _event_bus, _audit_chain, _scenario_engine, _agents, _timeseries
     _cdil = cdil
     _event_bus = event_bus
     _audit_chain = audit_chain
     _scenario_engine = scenario_engine
     _agents = agents
+    _timeseries = timeseries
 
 
 # ── Request Models ──
 
 class ScenarioRequest(BaseModel):
     scenario: str
+
+
+# ── Authentication ──
+
+@router.post("/auth/login", response_model=TokenResponse)
+async def login(req: LoginRequest):
+    """Authenticate and receive a JWT token."""
+    user = authenticate_user(req.username, req.password)
+    if not user:
+        raise HTTPException(401, "Invalid credentials")
+
+    token = create_access_token(user["username"], user["role"])
+    return TokenResponse(
+        access_token=token,
+        role=user["role"],
+        username=user["username"],
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
+
+
+@router.get("/auth/me")
+async def get_me(user: dict = Depends(require_auth)):
+    """Get current authenticated user info."""
+    user_data = DEFAULT_USERS.get(user["username"], {})
+    return {
+        "username": user["username"],
+        "role": user["role"],
+        "full_name": user_data.get("full_name", user["username"]),
+    }
+
+
+@router.get("/auth/roles")
+async def list_roles():
+    """List available roles and their permissions."""
+    return {
+        role: {"domains": Role.DOMAIN_ACCESS.get(role, [])}
+        for role in Role.ALL_ROLES
+    }
 
 
 # ── City State ──
@@ -125,11 +171,17 @@ async def verify_audit():
     return {"valid": valid, "message": message, "decisions_count": count}
 
 
-# ── Scenarios ──
+@router.get("/audit/merkle_proof")
+async def get_merkle_proof():
+    """Merkle tree proof for external verification of the audit chain."""
+    return _audit_chain.export_chain_proof()
+
+
+# ── Scenarios (Protected) ──
 
 @router.post("/scenarios/inject")
-async def inject_scenario(req: ScenarioRequest):
-    """Trigger a crisis scenario."""
+async def inject_scenario(req: ScenarioRequest, user: dict = Depends(require_role(Role.ADMIN, Role.OPERATOR))):
+    """Trigger a crisis scenario. Requires ADMIN or OPERATOR role."""
     result = await _scenario_engine.inject_scenario(req.scenario)
     if "error" in result:
         raise HTTPException(400, result["error"])
@@ -143,8 +195,8 @@ async def scenario_status():
 
 
 @router.post("/scenarios/reset")
-async def reset_scenario():
-    """Reset active scenario."""
+async def reset_scenario(user: dict = Depends(require_role(Role.ADMIN, Role.OPERATOR))):
+    """Reset active scenario. Requires ADMIN or OPERATOR role."""
     await _scenario_engine.reset()
     return {"status": "reset"}
 
@@ -165,7 +217,7 @@ async def ingest_sensor_data(payload: SensorPayload):
     """Ingest live IoT data from physical sensors (e.g., smart phone)."""
     # Push to CDIL directly
     if payload.type == "water_level":
-        zone = "zone_c1" # Force it to C1 for demo
+        zone = "zone_c1"  # Force it to C1 for demo
         await _cdil.update_zone(zone, {"flood_risk": payload.value})
         msg = f"🌊 Live River Sensor in {zone}: {payload.value}{payload.unit}"
     elif payload.type == "seismic":
@@ -175,14 +227,35 @@ async def ingest_sensor_data(payload: SensorPayload):
     else:
         msg = f"📡 Sensor {payload.sensor_id} reported {payload.value}{payload.unit}"
 
+    # Write to InfluxDB time-series (dual-write)
+    if _timeseries:
+        _timeseries.write_sensor_data(
+            measurement="iot_sensor",
+            tags={"sensor_id": payload.sensor_id, "type": payload.type},
+            fields={"value": payload.value, "lat": payload.lat, "lng": payload.lng},
+        )
+
     # Push to Event Bus to wake agents
-    await _event_bus.publish_timeline({
-        "event": msg,
-        "source": "Physical IoT Sensor",
-        "severity": "CRITICAL" if payload.value > 50 else "WARNING"
-    })
-    
+    await _event_bus.publish_timeline_event(
+        event_type="SENSOR_INGEST",
+        label=msg,
+        agent="iot_sensor",
+        data={"sensor_id": payload.sensor_id, "value": payload.value},
+    )
+
     return {"status": "ingested", "message": msg}
+
+
+# ── Time-Series Historical Data ──
+
+@router.get("/timeseries/{measurement}/{entity}/{field}")
+async def query_timeseries(measurement: str, entity: str, field: str, hours: int = 24):
+    """Query historical time-series data from InfluxDB."""
+    if not _timeseries:
+        raise HTTPException(503, "Time-series database not available")
+    data = await _timeseries.query_range(measurement, entity, field, hours)
+    stats = await _timeseries.get_stats(measurement, entity, field, hours)
+    return {"data": data, "stats": stats}
 
 
 # ── Health ──
@@ -206,4 +279,10 @@ async def health_check():
         "agents": agent_statuses,
         "audit_chain": {"count": audit_count, "valid": chain_valid},
         "scenario": await _scenario_engine.get_status(),
+        "services": {
+            "mqtt": settings.MQTT_ENABLED,
+            "influxdb": settings.INFLUXDB_ENABLED,
+            "kafka": settings.USE_KAFKA,
+        },
     }
+

@@ -1,9 +1,11 @@
 """Flood Agent — Rainfall monitoring, flood risk prediction, evacuation alerts."""
+import asyncio
 import time
 import logging
 from typing import List
 
 from agents.base_agent import BaseAgent
+from config import settings
 
 logger = logging.getLogger("nexus.agent.flood")
 
@@ -13,9 +15,93 @@ class FloodAgent(BaseAgent):
     AGENT_NAME = "Flood Agent"
     DOMAIN = "HYDROLOGY"
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._last_weather_fetch = 0
+        self._weather_task = None
+
+    async def start(self):
+        """Start agent + background weather polling."""
+        self._weather_task = asyncio.create_task(self._weather_poll_loop())
+        await super().start()
+
+    async def stop(self):
+        """Stop agent + cancel weather polling."""
+        if self._weather_task:
+            self._weather_task.cancel()
+        await super().stop()
+
+    # ── Live Weather API ──
+
+    async def _weather_poll_loop(self):
+        """Background loop: fetch live weather data from OpenWeatherMap."""
+        while True:
+            try:
+                await self._fetch_live_weather()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.warning(f"[FloodAgent] Weather poll error: {e}")
+            await asyncio.sleep(settings.WEATHER_POLL_INTERVAL)
+
+    async def _fetch_live_weather(self):
+        """Fetch weather from OpenWeatherMap and inject into CDIL."""
+        api_key = settings.OPENWEATHERMAP_API_KEY
+        if not api_key:
+            return  # No API key configured
+
+        import httpx
+        url = (
+            f"https://api.openweathermap.org/data/2.5/weather"
+            f"?id={settings.OPENWEATHERMAP_CITY_ID}"
+            f"&appid={api_key}&units=metric"
+        )
+
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(url)
+            if resp.status_code != 200:
+                logger.warning(f"[FloodAgent] Weather API returned {resp.status_code}")
+                return
+            data = resp.json()
+
+        # Extract weather data
+        rain_1h = data.get("rain", {}).get("1h", 0)  # mm in last hour
+        rain_3h = data.get("rain", {}).get("3h", 0)
+        temp = data.get("main", {}).get("temp", 30)
+        humidity = data.get("main", {}).get("humidity", 60)
+        wind_speed = data.get("wind", {}).get("speed", 0) * 3.6  # m/s → km/h
+        weather_desc = data.get("weather", [{}])[0].get("description", "clear")
+
+        # Inject into CDIL
+        await self.cdil.update("weather:rainfall_1h_mm", str(rain_1h), source="openweathermap")
+        await self.cdil.update("weather:rainfall_3h_mm", str(rain_3h), source="openweathermap")
+        await self.cdil.update("weather:temperature_c", str(temp), source="openweathermap")
+        await self.cdil.update("weather:humidity", str(humidity), source="openweathermap")
+        await self.cdil.update("weather:wind_speed_kmh", str(round(wind_speed, 1)), source="openweathermap")
+        await self.cdil.update("weather:description", weather_desc, source="openweathermap")
+
+        # Map rain to zone sensors (propagate to all zones)
+        rainfall_rate = rain_1h if rain_1h > 0 else rain_3h / 3.0
+        for zone in ["zone_c1", "zone_c2", "zone_c3", "zone_c4"]:
+            await self.cdil.update(
+                f"sensor:{zone}:rainfall_mm_hr", str(round(rainfall_rate, 1)),
+                source="openweathermap"
+            )
+
+        if rainfall_rate > 0:
+            await self._broadcast_reasoning(
+                f"🌦 Live Weather: {weather_desc}. Rain: {rainfall_rate:.1f}mm/hr, "
+                f"Temp: {temp}°C, Humidity: {humidity}%, Wind: {wind_speed:.1f}km/h",
+                severity="warning" if rainfall_rate > 30 else "info"
+            )
+
+        self._last_weather_fetch = time.time()
+        logger.info(f"[FloodAgent] Weather updated: rain={rainfall_rate}mm/hr, desc={weather_desc}")
+
+    # ── Core Agent Logic ──
+
     def _should_act(self, cdil_state: dict, messages: list) -> bool:
         """Act on rainfall data or cross-domain messages."""
-        # Check for rainfall sensors above threshold
         for key, val in cdil_state.items():
             if "rainfall_mm_hr" in key:
                 try:
@@ -138,7 +224,6 @@ class FloodAgent(BaseAgent):
 
         elif tool == "predict_water_level":
             zone_id = args["zone_id"]
-            # Simple prediction based on rainfall
             rainfall = float(cdil_state.get(f"sensor:{zone_id}:rainfall_mm_hr", 0))
             predicted = round(rainfall / 120 * args.get("hours_ahead", 2), 2)
 
@@ -150,7 +235,7 @@ class FloodAgent(BaseAgent):
     def _get_system_prompt(self) -> str:
         return """You are the Flood Agent in NEXUS-GOV for Hyderabad, India.
 YOUR RESPONSIBILITIES:
-- Monitor rainfall sensors across 12 city zones
+- Monitor rainfall sensors across 12 city zones (including LIVE OpenWeatherMap data)
 - Predict flood risk based on rainfall intensity, terrain, drainage capacity
 - Issue evacuation alerts when water levels threaten safety
 - Broadcast critical alerts to ALL other agents for cross-domain cascading
@@ -165,3 +250,4 @@ If confidence < 0.6, request human override."""
 
     async def _broadcast_status(self):
         await super()._broadcast_status()
+
