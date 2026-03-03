@@ -32,7 +32,15 @@ class Settings(BaseSettings):
     AUDIT_DB_PATH: str = "data/audit.db"
 
     # ── CORS ──
-    CORS_ORIGINS: list = ["http://localhost:5173", "http://localhost:3000", "*"]
+    CORS_ORIGINS: list = [
+        "http://localhost:5173", "https://localhost:5173",
+        "http://localhost:5174", "https://localhost:5174",
+        "http://localhost:5175", "https://localhost:5175",
+        "http://127.0.0.1:5173", "https://127.0.0.1:5173",
+        "http://127.0.0.1:5174", "https://127.0.0.1:5174",
+        "http://10.187.2.121:5174", "https://10.187.2.121:5174",
+        "http://localhost:3000", "*"
+    ]
 
     # ── MQTT ──
     MQTT_BROKER_HOST: str = "localhost"

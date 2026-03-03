@@ -104,18 +104,18 @@ async def startup():
         redis_client = aioredis.from_url(
             settings.REDIS_URL,
             decode_responses=False,
-            socket_connect_timeout=5,
+            socket_connect_timeout=3,
         )
         await redis_client.ping()
         logger.info("✓ Redis connected")
     except Exception as e:
-        logger.warning(f"⚠ Redis connection failed: {e}. Using in-memory fallback.")
-        redis_client = aioredis.from_url("redis://localhost:6379", decode_responses=False)
+        logger.warning(f"⚠ Redis connection failed: {e}. Falling back to Fakeredis (in-memory).")
         try:
-            await redis_client.ping()
-        except Exception:
-            logger.error("Redis is required. Start Redis with: docker run -p 6379:6379 redis:7-alpine")
-            logger.info("Continuing without Redis for demo purposes...")
+            from fakeredis import aioredis as fakeaioredis
+            redis_client = fakeaioredis.FakeRedis(decode_responses=False)
+            logger.info("✓ Fakeredis initialized successfully for demo mode")
+        except ImportError:
+            logger.error("Fakeredis is required if a physical Redis broker is unavailable. Please `pip install fakeredis`.")
             return
 
     # 2. Initialize core

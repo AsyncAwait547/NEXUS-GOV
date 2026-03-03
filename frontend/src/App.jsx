@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import TopBar from './components/TopBar';
 import AgentPanel from './components/AgentPanel';
-import CityMap from './components/CityMap';
+import AdvancedCityMap from './components/AdvancedCityMap';
+import CrisisTicker from './components/CrisisTicker';
+import CivicVitals from './components/CivicVitals';
 import ReasoningLog from './components/ReasoningLog';
 import EventTimeline from './components/EventTimeline';
 import ScenarioPanel from './components/ScenarioPanel';
@@ -19,6 +21,29 @@ export default function App() {
     const [showOverride, setShowOverride] = useState(false);
     const [autoDemo, setAutoDemo] = useState(false);
     const [showInit, setShowInit] = useState(true);
+    const [cdilSnapshot, setCdilSnapshot] = useState({});
+    const [authToken, setAuthToken] = useState(null);
+
+    // ── Pre-authenticate with JWT to access protected Phase 4 routes ──
+    useEffect(() => {
+        async function authenticate() {
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/v1/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: 'admin', password: 'nexus2026' })
+                });
+                const data = await res.json();
+                if (data.access_token) {
+                    setAuthToken(data.access_token);
+                    console.log('[NEXUS-AUTH] System authenticated as ADMIN');
+                }
+            } catch (e) {
+                console.warn('[NEXUS-AUTH] Backend unreachable for login');
+            }
+        }
+        authenticate();
+    }, []);
 
     // ── Wire backend Socket.IO events into simulation state ──
     useEffect(() => {
@@ -103,6 +128,9 @@ export default function App() {
             const key = data.key || '';
             const val = data.value || '';
 
+            // Update CDIL snapshot for CivicVitals
+            setCdilSnapshot(prev => ({ ...prev, [key]: val }));
+
             // Zone flood risk updates → map colors
             if (key.match(/^zone:zone_c[12]:flood_risk/)) {
                 const zoneMap = { zone_c1: 'C1', zone_c2: 'C2' };
@@ -158,31 +186,41 @@ export default function App() {
             try {
                 const res = await fetch(`${BACKEND_URL}/api/v1/scenarios/inject`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+                    },
                     body: JSON.stringify({ scenario: scenarioId })
                 });
-                const data = await res.json();
-                if (data.error) {
-                    console.warn('[NEXUS] Backend inject error:', data.error);
-                    injectScenario(scenarioId); // Fallback to frontend sim
+
+                const data = await res.json().catch(() => ({}));
+
+                if (!res.ok) {
+                    console.warn('[NEXUS] Backend inject rejected:', data.detail || data.error || res.statusText);
+                    return; // Do not fallback if backend is alive but rejected the payload
                 }
+
+                console.info('[NEXUS] Scenario injected remotely:', scenarioId);
             } catch (e) {
-                console.warn('[NEXUS] Backend unreachable, using simulation:', e);
+                console.error('[NEXUS] Backend unreachable, using simulation:', e.message);
                 injectScenario(scenarioId);
             }
         } else {
             injectScenario(scenarioId);
         }
-    }, [connected, simulationMode, injectScenario]);
+    }, [connected, simulationMode, injectScenario, authToken]);
 
     const handleReset = useCallback(async () => {
         if (connected && !simulationMode) {
             try {
-                await fetch(`${BACKEND_URL}/api/v1/scenarios/reset`, { method: 'POST' });
+                await fetch(`${BACKEND_URL}/api/v1/scenarios/reset`, {
+                    method: 'POST',
+                    headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+                });
             } catch (e) { /* ignore */ }
         }
         resetSimulation();
-    }, [connected, simulationMode, resetSimulation]);
+    }, [connected, simulationMode, resetSimulation, authToken]);
 
     // Keyboard shortcuts
     useEffect(() => {
@@ -223,9 +261,12 @@ export default function App() {
         // Call backend override API when connected
         if (connected && !simulationMode) {
             try {
-                await fetch(`${BACKEND_URL}/api/v1/override/force_action`, {
+                const res = await fetch(`${BACKEND_URL}/api/v1/override/force_action`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+                    },
                     body: JSON.stringify({
                         action: override.command,
                         parameters: {},
@@ -233,6 +274,11 @@ export default function App() {
                         zones: override.zones || []
                     })
                 });
+
+                if (res.status === 401) {
+                    console.warn('[NEXUS] Override blocked: Unauthorized');
+                    return; // Prevent local execution if backend rejected
+                }
             } catch (e) { /* fallback to local */ }
         }
 
@@ -257,7 +303,7 @@ export default function App() {
             type: 'ADD_TIMELINE',
             event: { kind: 'HUMAN_OVERRIDE', label: 'Human Override', color: 'red' }
         });
-    }, [applyAction, state.auditChain.length, connected, simulationMode]);
+    }, [applyAction, state.auditChain.length, connected, simulationMode, authToken]);
 
     // Count active agents
     const activeAgents = Object.values(state.agents).filter(a => a.status !== 'OFFLINE').length;
@@ -296,6 +342,9 @@ export default function App() {
                 </div>
             </div>
 
+            {/* Crisis Ticker */}
+            <CrisisTicker events={state.reasoningLog.filter(e => e.severity === 'critical' || e.severity === 'warning').slice(0, 12)} />
+
             {/* Main Dashboard Grid */}
             <div className="dashboard">
                 {/* Top Bar */}
@@ -307,6 +356,7 @@ export default function App() {
                 {/* Left Sidebar */}
                 <div className="sidebar-area">
                     <AgentPanel agents={state.agents} />
+                    <CivicVitals cdilSnapshot={cdilSnapshot} />
                     <ScenarioPanel
                         activeScenario={state.activeScenario}
                         onInject={handleInjectScenario}
@@ -314,9 +364,9 @@ export default function App() {
                     />
                 </div>
 
-                {/* Center Map */}
+                {/* Center Map — Deck.gl WebGL */}
                 <div className="map-area">
-                    <CityMap
+                    <AdvancedCityMap
                         zones={state.zones}
                         ambulances={state.ambulances}
                         corridorActive={state.corridorActive}
