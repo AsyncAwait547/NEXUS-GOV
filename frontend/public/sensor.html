@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXUS-GOV Live Sensor Node</title>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --panel-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-blue: #3b82f6;
+            --accent-red: #ef4444;
+            --accent-green: #10b981;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        p.subtitle {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-top: 0;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .sensor-card {
+            background-color: var(--panel-bg);
+            border-radius: 16px;
+            padding: 24px;
+            width: 100%;
+            max-width: 340px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .data-row:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .data-label {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .data-value {
+            font-size: 1.4rem;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: var(--accent-red);
+            display: inline-block;
+            margin-right: 8px;
+            box-shadow: 0 0 10px var(--accent-red);
+        }
+
+        .status-dot.active {
+            background-color: var(--accent-green);
+            box-shadow: 0 0 10px var(--accent-green);
+        }
+
+        button {
+            background-color: var(--accent-blue);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 16px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 20px;
+            width: 100%;
+            max-width: 340px;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        button.transmitting {
+            background-color: var(--accent-red);
+        }
+
+        .instruction {
+            margin-top: 30px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            text-align: center;
+            max-width: 300px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Global IoT Node</h1>
+    <p class="subtitle">NEXUS-GOV Field Sensor</p>
+
+    <div class="sensor-card">
+        <div class="data-row">
+            <span class="data-label">Status</span>
+            <div style="display: flex; align-items: center;">
+                <span class="status-dot" id="statusDot"></span>
+                <span class="data-value" style="font-size: 1.1rem;" id="statusText">Standby</span>
+            </div>
+        </div>
+
+        <div class="data-row">
+            <span class="data-label">Sim River Level</span>
+            <span class="data-value"><span id="waterLevel">32.4</span><span
+                    style="font-size: 0.9rem; color: #94a3b8; margin-left: 4px;">mm</span></span>
+        </div>
+
+        <div class="data-row">
+            <span class="data-label">Live Seismic (Motion)</span>
+            <span class="data-value"><span id="seismicData">0.0</span><span
+                    style="font-size: 0.9rem; color: #94a3b8; margin-left: 4px;">M</span></span>
+        </div>
+    </div>
+
+    <button id="toggleBtn">Begin Live Transmission</button>
+
+    <div id="manualControls"
+        style="display: none; width: 100%; max-width: 340px; margin-top: 20px; background: var(--panel-bg); padding: 15px; border-radius: 12px; border: 1px dashed var(--accent-blue); box-sizing: border-box;">
+        <p style="text-align: center; color: var(--accent-blue); margin-top: 0; font-size: 0.9rem;">Gyroscope blocked by
+            iOS/Android security (requires HTTPS).<br>Using manual sliders:</p>
+
+        <label style="display: block; color: var(--text-muted); font-size: 0.85rem; margin-bottom: 5px;">Simulate River
+            Water Level (mm)</label>
+        <input type="range" id="manualWater" min="30" max="150" value="32.4" style="width: 100%; margin-bottom: 15px;">
+
+        <label style="display: block; color: var(--text-muted); font-size: 0.85rem; margin-bottom: 5px;">Simulate
+            Seismic Activity (M)</label>
+        <input type="range" id="manualSeismic" min="0" max="9.9" step="0.1" value="0.0" style="width: 100%;">
+    </div>
+
+    <p class="instruction">
+        Hold your phone flat. Tap "Begin Live Transmission" and shake your phone to simulate a seismic event, or tilt it
+        to simulate rising flood waters!
+    </p>
+
+    <script>
+        let isTransmitting = false;
+        let lastTransmit = 0;
+        let accelThreshold = 1.5; // threshold for shaking
+        let motionDetected = false;
+
+        const toggleBtn = document.getElementById('toggleBtn');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const waterLevelEl = document.getElementById('waterLevel');
+        const seismicDataEl = document.getElementById('seismicData');
+        const manualControls = document.getElementById('manualControls');
+
+        // Dynamically get the backend URL based on where this page is hosted
+        const backendUrl = `http://${window.location.hostname}:8000/api/v1/sensors/ingest`;
+
+        let currentWater = 30.0;
+        let currentSeismic = 0.0;
+
+        // Listen for device motion to simulate seismic activity
+        window.addEventListener("devicemotion", (event) => {
+            const acc = event.accelerationIncludingGravity;
+            if (acc && acc.x !== null) {
+                motionDetected = true;
+                if (!isTransmitting) return;
+
+                const magnitude = Math.sqrt(acc.x * acc.x + acc.y * acc.y + acc.z * acc.z);
+                const relativeMagnitude = Math.abs(magnitude - 9.81);
+
+                if (relativeMagnitude > accelThreshold) {
+                    currentSeismic = Math.min((relativeMagnitude / 3).toFixed(1), 9.9);
+                    seismicDataEl.innerText = currentSeismic;
+
+                    if (Date.now() - lastTransmit > 2000) {
+                        transmit("seismic", currentSeismic, "M");
+                    }
+                }
+            }
+        });
+
+        // Listen for device orientation to simulate rising water level based on tilt
+        window.addEventListener("deviceorientation", (event) => {
+            let tilt = event.beta;
+            if (tilt !== null && motionDetected) {
+                if (!isTransmitting) return;
+
+                const normalizedTilt = Math.max(0, Math.min(tilt, 90)); // Only consider tilting "up"
+                currentWater = (30 + (normalizedTilt / 90) * 120).toFixed(1);
+                waterLevelEl.innerText = currentWater;
+
+                if (Date.now() - lastTransmit > 3000 && currentWater > 50) {
+                    transmit("water_level", currentWater, "mm");
+                }
+            }
+        });
+
+        // Manual Slider Event Listeners
+        document.getElementById('manualWater').addEventListener('input', (e) => {
+            if (!isTransmitting) return;
+            currentWater = parseFloat(e.target.value).toFixed(1);
+            waterLevelEl.innerText = currentWater;
+            if (Date.now() - lastTransmit > 2000 && currentWater > 50) {
+                transmit("water_level", currentWater, "mm");
+            }
+        });
+
+        document.getElementById('manualSeismic').addEventListener('input', (e) => {
+            if (!isTransmitting) return;
+            currentSeismic = parseFloat(e.target.value).toFixed(1);
+            seismicDataEl.innerText = currentSeismic;
+            if (currentSeismic > 1.0 && Date.now() - lastTransmit > 2000) {
+                transmit("seismic", currentSeismic, "M");
+            }
+        });
+
+        async function requestMotionPermission() {
+            if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+                try {
+                    const permission = await DeviceMotionEvent.requestPermission();
+                    if (permission !== 'granted') {
+                        manualControls.style.display = "block";
+                    }
+                } catch (e) {
+                    manualControls.style.display = "block";
+                }
+            } else {
+                // Not Safari iOS 13+. Wait 1 second passing. If `devicemotion` hasn't fired, sensors are blocked.
+                setTimeout(() => {
+                    if (!motionDetected) {
+                        manualControls.style.display = "block";
+                    }
+                }, 1000);
+            }
+        }
+
+        async function transmit(type, value, unit) {
+            lastTransmit = Date.now();
+
+            try {
+                await fetch(backendUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sensor_id: "hackathon_phone_01",
+                        type: type,
+                        value: parseFloat(value),
+                        unit: unit,
+                        lat: 17.3850,
+                        lng: 78.4867
+                    })
+                });
+
+                // Flash success explicitly
+                statusDot.style.boxShadow = "0 0 20px #fff";
+                statusDot.style.backgroundColor = "white";
+                setTimeout(() => {
+                    statusDot.style.boxShadow = "0 0 10px var(--accent-green)";
+                    statusDot.style.backgroundColor = "var(--accent-green)";
+                }, 150);
+            } catch (err) {
+                console.error("Transmission failed", err);
+            }
+        }
+
+        toggleBtn.addEventListener('click', async () => {
+            if (toggleBtn.innerText === "Begin Live Transmission") {
+                await requestMotionPermission();
+            }
+
+            isTransmitting = !isTransmitting;
+
+            if (isTransmitting) {
+                toggleBtn.innerText = "Stop Transmission";
+                toggleBtn.classList.add("transmitting");
+                statusDot.classList.add("active");
+                statusText.innerText = "Transmitting LIVE";
+            } else {
+                toggleBtn.innerText = "Begin Live Transmission";
+                toggleBtn.classList.remove("transmitting");
+                statusDot.classList.remove("active");
+                statusText.innerText = "Standby";
+                currentSeismic = 0.0;
+                seismicDataEl.innerText = "0.0";
+                document.getElementById('manualSeismic').value = 0.0;
+            }
+        });
+
+    </script>
+</body>
+
+</html>

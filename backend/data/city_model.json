@@ -1,0 +1,352 @@
+{
+    "zones": [
+        {
+            "id": "zone_a1",
+            "name": "Begumpet",
+            "population": 85000,
+            "elevation_m": 536,
+            "lat": 17.4375,
+            "lng": 78.4983
+        },
+        {
+            "id": "zone_a2",
+            "name": "Secunderabad",
+            "population": 120000,
+            "elevation_m": 540,
+            "lat": 17.4399,
+            "lng": 78.4983
+        },
+        {
+            "id": "zone_a3",
+            "name": "Ameerpet",
+            "population": 95000,
+            "elevation_m": 530,
+            "lat": 17.4375,
+            "lng": 78.4483
+        },
+        {
+            "id": "zone_b1",
+            "name": "Kukatpally",
+            "population": 200000,
+            "elevation_m": 545,
+            "lat": 17.4948,
+            "lng": 78.3996
+        },
+        {
+            "id": "zone_b2",
+            "name": "HITEC City",
+            "population": 150000,
+            "elevation_m": 560,
+            "lat": 17.4435,
+            "lng": 78.3772
+        },
+        {
+            "id": "zone_b3",
+            "name": "Gachibowli",
+            "population": 110000,
+            "elevation_m": 555,
+            "lat": 17.4401,
+            "lng": 78.3489
+        },
+        {
+            "id": "zone_c1",
+            "name": "Khairatabad",
+            "population": 70000,
+            "elevation_m": 510,
+            "lat": 17.4156,
+            "lng": 78.4701
+        },
+        {
+            "id": "zone_c2",
+            "name": "Hussain Sagar",
+            "population": 40000,
+            "elevation_m": 505,
+            "lat": 17.4239,
+            "lng": 78.4738
+        },
+        {
+            "id": "zone_c3",
+            "name": "LB Nagar",
+            "population": 180000,
+            "elevation_m": 520,
+            "lat": 17.3457,
+            "lng": 78.5522
+        },
+        {
+            "id": "zone_d1",
+            "name": "Malkajgiri",
+            "population": 160000,
+            "elevation_m": 538,
+            "lat": 17.4710,
+            "lng": 78.5275
+        },
+        {
+            "id": "zone_d2",
+            "name": "Uppal",
+            "population": 140000,
+            "elevation_m": 525,
+            "lat": 17.4065,
+            "lng": 78.5587
+        },
+        {
+            "id": "zone_d3",
+            "name": "Dilsukhnagar",
+            "population": 130000,
+            "elevation_m": 515,
+            "lat": 17.3688,
+            "lng": 78.5247
+        }
+    ],
+    "roads": [
+        {
+            "id": "r_a1_a2",
+            "name": "Rasoolpura Rd",
+            "from": "zone_a1",
+            "to": "zone_a2",
+            "lanes": 4,
+            "flood_prone": false
+        },
+        {
+            "id": "r_a1_a3",
+            "name": "Begumpet-Ameerpet",
+            "from": "zone_a1",
+            "to": "zone_a3",
+            "lanes": 6,
+            "flood_prone": false
+        },
+        {
+            "id": "r_a3_c1",
+            "name": "Punjagutta Rd",
+            "from": "zone_a3",
+            "to": "zone_c1",
+            "lanes": 4,
+            "flood_prone": true
+        },
+        {
+            "id": "r_c1_c2",
+            "name": "Tank Bund Rd",
+            "from": "zone_c1",
+            "to": "zone_c2",
+            "lanes": 6,
+            "flood_prone": true
+        },
+        {
+            "id": "r_c2_c3",
+            "name": "Chaderghat Rd",
+            "from": "zone_c2",
+            "to": "zone_c3",
+            "lanes": 4,
+            "flood_prone": true
+        },
+        {
+            "id": "r_b1_b2",
+            "name": "JNTU-HITEC Rd",
+            "from": "zone_b1",
+            "to": "zone_b2",
+            "lanes": 6,
+            "flood_prone": false
+        },
+        {
+            "id": "r_b2_b3",
+            "name": "Cyber Towers Rd",
+            "from": "zone_b2",
+            "to": "zone_b3",
+            "lanes": 4,
+            "flood_prone": false
+        },
+        {
+            "id": "r_d1_d2",
+            "name": "Malkajgiri-Uppal",
+            "from": "zone_d1",
+            "to": "zone_d2",
+            "lanes": 4,
+            "flood_prone": true
+        },
+        {
+            "id": "r_c1_d3",
+            "name": "Khairatabad Link",
+            "from": "zone_c1",
+            "to": "zone_d3",
+            "lanes": 4,
+            "flood_prone": true
+        },
+        {
+            "id": "r_a2_d1",
+            "name": "Secunderabad-Malk",
+            "from": "zone_a2",
+            "to": "zone_d1",
+            "lanes": 4,
+            "flood_prone": false
+        }
+    ],
+    "substations": [
+        {
+            "id": "sub_1",
+            "name": "Begumpet SS",
+            "zone": "zone_a1",
+            "capacity_mw": 200,
+            "backup": true
+        },
+        {
+            "id": "sub_2",
+            "name": "Kukatpally SS",
+            "zone": "zone_b1",
+            "capacity_mw": 350,
+            "backup": true
+        },
+        {
+            "id": "sub_3",
+            "name": "LB Nagar SS",
+            "zone": "zone_c3",
+            "capacity_mw": 250,
+            "backup": false
+        },
+        {
+            "id": "sub_4",
+            "name": "Secunderabad SS",
+            "zone": "zone_a2",
+            "capacity_mw": 300,
+            "backup": true
+        }
+    ],
+    "hospitals": [
+        {
+            "id": "hosp_1",
+            "name": "NIMS Hospital",
+            "zone": "zone_c1",
+            "beds": 1500,
+            "icu": 200
+        },
+        {
+            "id": "hosp_2",
+            "name": "Gandhi Hospital",
+            "zone": "zone_a2",
+            "beds": 1200,
+            "icu": 150
+        },
+        {
+            "id": "hosp_3",
+            "name": "Yashoda Hospital",
+            "zone": "zone_b1",
+            "beds": 500,
+            "icu": 80
+        },
+        {
+            "id": "hosp_4",
+            "name": "Apollo Hospital",
+            "zone": "zone_b3",
+            "beds": 800,
+            "icu": 120
+        },
+        {
+            "id": "hosp_5",
+            "name": "KIMS Hospital",
+            "zone": "zone_a2",
+            "beds": 600,
+            "icu": 90
+        },
+        {
+            "id": "hosp_6",
+            "name": "Care Hospital",
+            "zone": "zone_c3",
+            "beds": 450,
+            "icu": 60
+        }
+    ],
+    "ambulances": [
+        {
+            "id": "amb_1",
+            "home": "zone_a1",
+            "lat": 17.4375,
+            "lng": 78.4983
+        },
+        {
+            "id": "amb_2",
+            "home": "zone_b1",
+            "lat": 17.4948,
+            "lng": 78.3996
+        },
+        {
+            "id": "amb_3",
+            "home": "zone_c3",
+            "lat": 17.3457,
+            "lng": 78.5522
+        },
+        {
+            "id": "amb_4",
+            "home": "zone_b3",
+            "lat": 17.4401,
+            "lng": 78.3489
+        },
+        {
+            "id": "amb_5",
+            "home": "zone_a2",
+            "lat": 17.4399,
+            "lng": 78.4983
+        },
+        {
+            "id": "amb_6",
+            "home": "zone_d1",
+            "lat": 17.4710,
+            "lng": 78.5275
+        },
+        {
+            "id": "amb_7",
+            "home": "zone_c1",
+            "lat": 17.4156,
+            "lng": 78.4701
+        },
+        {
+            "id": "amb_8",
+            "home": "zone_d3",
+            "lat": 17.3688,
+            "lng": 78.5247
+        }
+    ],
+    "adjacency": {
+        "zone_a1": [
+            "zone_a2",
+            "zone_a3"
+        ],
+        "zone_a2": [
+            "zone_a1",
+            "zone_d1"
+        ],
+        "zone_a3": [
+            "zone_a1",
+            "zone_c1"
+        ],
+        "zone_b1": [
+            "zone_b2"
+        ],
+        "zone_b2": [
+            "zone_b1",
+            "zone_b3"
+        ],
+        "zone_b3": [
+            "zone_b2"
+        ],
+        "zone_c1": [
+            "zone_a3",
+            "zone_c2",
+            "zone_d3"
+        ],
+        "zone_c2": [
+            "zone_c1",
+            "zone_c3"
+        ],
+        "zone_c3": [
+            "zone_c2"
+        ],
+        "zone_d1": [
+            "zone_a2",
+            "zone_d2"
+        ],
+        "zone_d2": [
+            "zone_d1"
+        ],
+        "zone_d3": [
+            "zone_c1"
+        ]
+    }
+}
